@@ -1,7 +1,7 @@
 from datetime import date as date_type
 
 from fastapi import Depends, FastAPI, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
@@ -19,6 +19,19 @@ class TransactionIn(BaseModel):
     date: date_type
     card: str  # last 4 digits only — never store a full card number
     description: str = ""
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def coerce_amount(cls, value):
+        # Accept "42.50", "$1,234.56", or a number; convert to float.
+        if isinstance(value, str):
+            value = value.strip().lstrip("$").replace(",", "")
+            if not value:
+                raise ValueError("amount must not be empty")
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"amount must be a valid number, got {value!r}")
 
 
 class TransactionOut(TransactionIn):
