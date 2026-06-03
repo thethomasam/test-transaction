@@ -16,9 +16,7 @@ app = FastAPI()
 class TransactionIn(BaseModel):
     amount: float
     merchant: str
-    date: date_type
     card: str  # last 4 digits only — never store a full card number
-    description: str = ""
 
     @field_validator("amount", mode="before")
     @classmethod
@@ -34,9 +32,14 @@ class TransactionIn(BaseModel):
             raise ValueError(f"amount must be a valid number, got {value!r}")
 
 
-class TransactionOut(TransactionIn):
+class TransactionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    amount: float
+    merchant: str
+    card: str
+    date: date_type
+    description: str
 
 
 @app.get("/transaction", response_model=list[TransactionOut])
@@ -46,7 +49,12 @@ def list_transactions(db: Session = Depends(get_db)):
 
 @app.post("/transaction", response_model=TransactionOut, status_code=201)
 def add_transaction(payload: TransactionIn, db: Session = Depends(get_db)):
-    transaction = Transaction(**payload.model_dump())
+    today = date_type.today()
+    transaction = Transaction(
+        **payload.model_dump(),
+        date=today,
+        description=f"{payload.merchant} on {today.isoformat()}",
+    )
     db.add(transaction)
     db.commit()
     db.refresh(transaction)
